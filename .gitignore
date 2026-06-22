@@ -1,0 +1,27 @@
+# Node.js dependencies and builds
+node_modules/
+dist/
+**/node_modules/
+**/dist/
+
+# Python compiler caches and virtual envs
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+env/
+ENV/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local configuration and OS files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.local
+*.log
