@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Disaster Mesh: SOS Portal</title>
+    <style>
+        body { 
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; 
+            background: #111; 
+            color: #eee; 
+            margin: 0; 
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .wrapper { max-width: 500px; width: 100%; }
+        
+        .header { 
+            background: #1a1a1a; 
+            padding: 20px; 
+            border-radius: 12px; 
+            text-align: center; 
+            border: 2px solid #e74c3c;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 15px rgba(231, 76, 60, 0.2);
+        }
+        h1 { margin: 0 0 10px 0; font-size: 24px; color: #e74c3c; }
+        
+        .serial-box {
+            background: #1e1e1e;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-left: 4px solid #f1c40f;
+        }
+        .btn-connect {
+            padding: 8px 16px;
+            background: #f1c40f;
+            color: #111;
+            border: none;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .btn-connect:hover { background: #d4ac0d; }
+
+        .form-group {
+            background: #1e1e1e;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 15px;
+        }
+        label { display: block; margin-bottom: 8px; font-weight: bold; color: #bbb; }
+        
+        /* Request Code Button Grid */
+        .grid-codes {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        .code-btn {
+            display: flex;
+            align-items: center;
+            padding: 15px;
+            border-radius: 8px;
+            border: 2px solid transparent;
+            background: #2a2a2a;
+            color: white;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            text-align: left;
+            transition: all 0.2s ease;
+        }
+        .code-btn span.badge {
+            background: rgba(0,0,0,0.3);
+            padding: 5px 12px;
+            border-radius: 6px;
+            margin-right: 15px;
+            font-size: 18px;
+            min-width: 20px;
+            text-align: center;
+        }
+        
+        /* Specific Code Colors */
+        .code-btn[data-code="D"] { border-color: #e67e22; } /* Building Damage */
+        .code-btn[data-code="M"] { border-color: #e74c3c; } /* Medical */
+        .code-btn[data-code="F"] { border-color: #3498db; } /* Food/Water */
+        .code-btn[data-code="R"] { border-color: #9b59b6; } /* Rescue */
+        .code-btn[data-code="S"] { border-color: #2ecc71; } /* Shelter */
+
+        .code-btn:hover { background: #333; transform: translateY(-2px); }
+        .code-btn.selected { background: #fff; color: #111; box-shadow: 0 0 15px rgba(255,255,255,0.2); }
+        .code-btn.selected span.badge { background: #111; color: #fff; }
+
+        textarea, input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            background: #2a2a2a;
+            border: 1px solid #444;
+            color: white;
+            border-radius: 6px;
+            box-sizing: border-box;
+            font-size: 16px;
+            margin-bottom: 15px;
+        }
+        textarea { resize: vertical; min-height: 80px; }
+        input[type="text"]:disabled { background: #1a1a1a; color: #f1c40f; border-color: #333; cursor: not-allowed; font-weight: bold;}
+
+        .btn-submit {
+            width: 100%;
+            padding: 16px;
+            background: #e74c3c;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 4px 10px rgba(231, 76, 60, 0.3);
+        }
+        .btn-submit:disabled { background: #555; cursor: not-allowed; box-shadow: none; }
+        .btn-submit:not(:disabled):hover { background: #c0392b; }
+
+        .outbound-log {
+            background: #111;
+            border: 1px solid #333;
+            padding: 10px;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 13px;
+            max-height: 120px;
+            overflow-y: auto;
+            color: #888;
+            margin-top: 15px;
+        }
+
+        /* Simulation Controls Panel */
+        .sim-panel {
+            margin-top: 25px;
+            padding-top: 15px;
+            border-top: 2px dashed #444;
+        }
+        .sim-title {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #f1c40f;
+            margin-bottom: 15px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .sim-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            font-size: 14px;
+        }
+        .sim-row input[type="range"] {
+            flex-grow: 1;
+            margin: 0 10px;
+            accent-color: #f1c40f;
+        }
+        .sim-row span.val-disp {
+            min-width: 55px;
+            text-align: right;
+            font-family: monospace;
+            color: #f1c40f;
+        }
+        .sim-checkboxes {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 5px;
+        }
+        .sim-check-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: #2a2a2a;
+            padding: 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            user-select: none;
+        }
+        .sim-check-label input {
+            accent-color: #e74c3c;
+            width: 16px;
+            height: 16px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="wrapper">
+    <div class="header">
+        <h1>🚨 EMERGENCY HELP PORTAL</h1>
+        <small>Self-Healing Mesh Network Link</small>
+    </div>
+
+    <div class="serial-box">
+        <div>
+            <div style="font-weight: bold;">Mesh Node Connection</div>
+            <small id="usb-status" style="color: #e74c3c;">🔴 Disconnected</small>
+        </div>
+        <button id="connect-btn" class="btn-connect">🔌 Connect Node</button>
+    </div>
+
+    <div class="form-group">
+        <label>1. SELECT EMERGENCY TYPE</label>
+        <div class="grid-codes">
+            <button class="code-btn" data-code="D">
+                <span class="badge" style="color: #e67e22;">D</span> Building Damage / Collapse
+            </button>
+            <button class="code-btn" data-code="M">
+                <span class="badge" style="color: #e74c3c;">M</span> Medical Emergency
+            </button>
+            <button class="code-btn" data-code="F">
+                <span class="badge" style="color: #3498db;">F</span> Food & Water Required
+            </button>
+            <button class="code-btn" data-code="R">
+                <span class="badge" style="color: #9b59b6;">R</span> Rescue Required
+            </button>
+            <button class="code-btn" data-code="S">
+                <span class="badge" style="color: #2ecc71;">S</span> Shelter Required
+            </button>
+        </div>
+
+        <label for="node-input">2. CURRENT NODE ID (Auto-Detected On Connection)</label>
+        <input type="text" id="node-input" placeholder="Awaiting Auto-Detection..." maxlength="1" style="text-transform: uppercase;">
+
+        <label for="details">3. ADDITIONAL DETAILS / LOCATION</label>
+        <textarea id="details" placeholder="Describe exact location, hazards, and number of people..."></textarea>
+
+        <div class="sim-panel">
+            <div class="sim-title">🛠️ Demo Sensor Simulation Environmental Controls</div>
+            
+            <div class="sim-row">
+                <span>🌊 Water Level:</span>
+                <input type="range" id="sim-water" min="0" max="3" step="0.05" value="0">
+                <span class="val-disp" id="disp-water">0.00 m</span>
+            </div>
+
+            <div class="sim-row">
+                <span>🌡️ Temperature:</span>
+                <input type="range" id="sim-temp" min="-20" max="50" step="0.5" value="22">
+                <span class="val-disp" id="disp-temp">22.0 °C</span>
+            </div>
+
+            <div class="sim-checkboxes">
+                <label class="sim-check-label">
+                    <input type="checkbox" id="sim-fire"> 🔥 Fire Present
+                </label>
+                <label class="sim-check-label">
+                    <input type="checkbox" id="sim-collapse"> 🏗️ Structural Collapse
+                </label>
+            </div>
+        </div>
+        <br>
+
+        <button id="submit-btn" class="btn-submit" disabled>BROADCAST EMERGENCY</button>
+        
+        <div class="outbound-log" id="log">Transmission log empty...</div>
+    </div>
+</div>
+
+<script>
+    const connectBtn = document.getElementById('connect-btn');
+    const usbStatus = document.getElementById('usb-status');
+    const submitBtn = document.getElementById('submit-btn');
+    const codeButtons = document.querySelectorAll('.code-btn');
+    const nodeInput = document.getElementById('node-input');
+    const detailsInput = document.getElementById('details');
+    const logBox = document.getElementById('log');
+
+    const simWater = document.getElementById('sim-water');
+    const simTemp = document.getElementById('sim-temp');
+    const simFire = document.getElementById('sim-fire');
+    const simCollapse = document.getElementById('sim-collapse');
+    const dispWater = document.getElementById('disp-water');
+    const dispTemp = document.getElementById('disp-temp');
+
+    let serialPort = null;
+    let serialWriter = null;
+    let selectedCode = null;
+
+    simWater.addEventListener('input', (e) => { dispWater.innerText = parseFloat(e.target.value).toFixed(2) + " m"; });
+    simTemp.addEventListener('input', (e) => { dispTemp.innerText = parseFloat(e.target.value).toFixed(1) + " °C"; });
+
+    codeButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            codeButtons.forEach(b => b.classList.remove('selected'));
+            btn.classList.add('selected');
+            selectedCode = btn.getAttribute('data-code');
+            validateForm();
+        });
+    });
+
+    function validateForm() {
+        // Form is valid only if a code is selected, serial is connected, AND we have detected the node ID
+        if (selectedCode && serialPort && nodeInput.value.trim() !== "") {
+            submitBtn.disabled = false;
+        } else {
+            submitBtn.disabled = true;
+        }
+    }
+
+    // Web Serial Connection & Handshake Engine
+    connectBtn.addEventListener('click', async () => {
+        try {
+            serialPort = await navigator.serial.requestPort();
+            await serialPort.open({ baudRate: 115200 });
+            
+            // Set up outbound stream writer
+            const textEncoder = new TextEncoderStream();
+            serialPort.writable.pipeTo(textEncoder.writable);
+            serialWriter = textEncoder.writable.getWriter();
+
+            usbStatus.innerText = "🟢 Connected to Node";
+            usbStatus.style.color = "#2ecc71";
+            connectBtn.style.display = "none";
+
+            // Request the node's local ID immediately upon connecting
+            await serialWriter.write("REQ_ID\n");
+
+            // Start an asymmetric reader loop to catch the node's response packet
+            const textDecoder = new TextDecoderStream();
+            serialPort.readable.pipeTo(textDecoder.writable);
+            const reader = textDecoder.readable.getReader();
+
+            let buffer = "";
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+                
+                buffer += value;
+                let lines = buffer.split('\n');
+                buffer = lines.pop();
+
+                for (let line of lines) {
+                    line = line.trim();
+                    if (line.startsWith('{') && line.endsWith('}')) {
+                        try {
+                            const data = JSON.parse(line);
+                            // Catch the handshake packet from the ESP32
+                            if (data.type === "LOCAL_INFO" && data.node_id) {
+                                nodeInput.value = data.node_id;
+                                nodeInput.disabled = true; // Lock the UI input field
+                                validateForm();
+                            }
+                        } catch (e) {
+                            console.error(e);
+                        }
+                    }
+                }
+            }
+        } catch (err) {
+            alert("Failed to establish serial interface. Ensure terminal monitors are closed.");
+            console.error(err);
+        }
+    });
+
+    // Broadcast message over local Serial interface
+    submitBtn.addEventListener('click', async () => {
+        if (!serialWriter || !selectedCode) return;
+
+        const sourceNode = nodeInput.value.trim().toUpperCase(); 
+        const cleanDetailsText = detailsInput.value.trim();
+        const fallbackText = `[CODE ${selectedCode}] ${cleanDetailsText}`;
+
+        const emergencyJson = {
+            type: "EMERGENCY",
+            source: sourceNode,
+            target: "E",
+            payload: {
+                code: selectedCode,
+                water_level: parseFloat(simWater.value),
+                temp_c: parseFloat(simTemp.value),
+                has_fire: simFire.checked,
+                is_collapsed: simCollapse.checked,
+                details: fallbackText
+            }
+        };
+
+        const jsonString = JSON.stringify(emergencyJson) + "\n";
+
+        try {
+            await serialWriter.write(jsonString);
+            
+            const timestamp = new Date().toLocaleTimeString();
+            logBox.innerHTML = `[${timestamp}] SENT: ${jsonString}<br>` + logBox.innerHTML;
+            
+            submitBtn.innerText = "💥 TRANSMITTED!";
+            submitBtn.style.background = "#2ecc71";
+            setTimeout(() => {
+                submitBtn.innerText = "BROADCAST EMERGENCY";
+                submitBtn.style.background = "#e74c3c";
+            }, 3000);
+
+            detailsInput.value = "";
+        } catch (error) {
+            alert("Transmission failed over Serial link.");
+            console.error(error);
+        }
+    });
+</script>
+</body>
+</html>
