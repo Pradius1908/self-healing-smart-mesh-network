@@ -266,8 +266,40 @@ ws_manager.on_control_action = handle_dashboard_action
 
 async def heartbeat_watchdog():
     """Background loop to periodically monitor heartbeats and execute self-healing routes."""
+    counter = 0
     while True:
         await asyncio.sleep(1.0)
+        counter += 1
+        
+        # If Node E is connected, update its battery dynamically from the laptop power status API
+        if serial_manager.serial_conn and serial_manager.serial_conn.is_open:
+            try:
+                import ctypes
+                from ctypes import wintypes
+                class SYSTEM_POWER_STATUS(ctypes.Structure):
+                    _fields_ = [
+                        ('ACLineStatus', wintypes.BYTE),
+                        ('BatteryFlag', wintypes.BYTE),
+                        ('BatteryLifePercent', wintypes.BYTE),
+                        ('SystemStatus', wintypes.BYTE),
+                        ('BatteryLifeTime', wintypes.DWORD),
+                        ('BatteryFullLifeTime', wintypes.DWORD),
+                    ]
+                status = SYSTEM_POWER_STATUS()
+                if ctypes.windll.kernel32.GetSystemPowerStatus(ctypes.byref(status)):
+                    pct = status.BatteryLifePercent
+                    if pct != 255:
+                        graph.node_states['E']['battery'] = pct
+                    else:
+                        graph.node_states['E']['battery'] = 100
+                else:
+                    graph.node_states['E']['battery'] = 100
+            except Exception:
+                graph.node_states['E']['battery'] = 100
+                
+            graph.node_states['E']['last_seen'] = time.time()
+            graph.node_states['E']['status'] = 'ONLINE'
+
         # Check node timeouts (threshold = 15 seconds)
         dead_nodes = graph.check_timeouts(timeout_threshold=15.0)
         
@@ -301,7 +333,7 @@ async def heartbeat_watchdog():
                 
                 log_event("SYSTEM", "SELF_HEAL_DONE", f"Self-Healing completed. Path recovered in {round(graph.last_recovery_time * 1000, 2)} ms.")
                 
-        if dead_nodes:
+        if dead_nodes or (counter % 5 == 0):
             # Broadcast updated state
             await ws_manager.broadcast({
                 "type": "STATE_UPDATE",

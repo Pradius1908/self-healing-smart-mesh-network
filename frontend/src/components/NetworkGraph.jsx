@@ -1,11 +1,24 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
-const NODE_POSITIONS = {
-  'E': { x: 250, y: 80, label: 'E (Gateway)' },
-  'A': { x: 90, y: 190, label: 'A (Clinic)' },
-  'B': { x: 150, y: 370, label: 'B (Clinic)' },
-  'C': { x: 350, y: 370, label: 'C (Shelter)' },
-  'D': { x: 410, y: 190, label: 'D (Shelter)' }
+const DEFAULT_ANCHORS = {
+  'E': { x: 250, y: 250 },
+  'A': { x: 130, y: 130 },
+  'B': { x: 130, y: 370 },
+  'C': { x: 370, y: 370 },
+  'D': { x: 370, y: 130 }
+};
+
+const DEFAULT_RTTS = {
+  'A-B': 45, 'B-A': 45,
+  'A-C': 60, 'C-A': 60,
+  'A-D': 55, 'D-A': 55,
+  'A-E': 80, 'E-A': 80,
+  'B-C': 50, 'C-B': 50,
+  'B-D': 40, 'D-B': 40,
+  'B-E': 65, 'E-B': 65,
+  'C-D': 70, 'D-C': 70,
+  'C-E': 75, 'E-C': 75,
+  'D-E': 30, 'E-D': 30
 };
 
 const LINKS = [
@@ -23,6 +36,151 @@ const LINKS = [
 
 export default function NetworkGraph({ nodes, rttMatrix, activeRoute, lastPacket }) {
   const [animatedPackets, setAnimatedPackets] = useState([]);
+  
+  const [positions, setPositions] = useState({
+    'E': { x: 250, y: 250 },
+    'A': { x: 130, y: 130 },
+    'B': { x: 130, y: 370 },
+    'C': { x: 370, y: 370 },
+    'D': { x: 370, y: 130 }
+  });
+
+  const rttMatrixRef = useRef(rttMatrix);
+  const nodesRef = useRef(nodes);
+
+  useEffect(() => {
+    rttMatrixRef.current = rttMatrix;
+    nodesRef.current = nodes;
+  }, [rttMatrix, nodes]);
+
+  // Physics animation loop to scale distances based on measured RTT
+  useEffect(() => {
+    let animId;
+    
+    const tick = () => {
+      setPositions(prev => {
+        const next = { ...prev };
+        const fx = { 'E': 0, 'A': 0, 'B': 0, 'C': 0, 'D': 0 };
+        const fy = { 'E': 0, 'A': 0, 'B': 0, 'C': 0, 'D': 0 };
+        
+        const getLocalNodeState = (nodeId) => {
+          const node = nodesRef.current.find(n => n.id === nodeId);
+          return node ? node.status : 'OFFLINE';
+        };
+        
+        // 1. Very weak centering gravity to prevent float nodes from drifting off-screen,
+        // without forcing them back to specific static anchor coords.
+        const kCenterGravity = 0.005;
+        const floatNodes = ['A', 'B', 'C', 'D'];
+        
+        floatNodes.forEach(nodeId => {
+          if (getLocalNodeState(nodeId) === 'ONLINE') {
+            const pos = prev[nodeId] || DEFAULT_ANCHORS[nodeId];
+            fx[nodeId] += kCenterGravity * (250 - pos.x);
+            fy[nodeId] += kCenterGravity * (250 - pos.y);
+          }
+        });
+        
+        // 2. Link Spring forces
+        const kSpring = 0.05;
+        const getLinkWeightLocal = (u, v) => {
+          const matrix = rttMatrixRef.current;
+          if (matrix && matrix[u] && matrix[u][v] !== null && matrix[u][v] !== undefined) {
+            return matrix[u][v];
+          }
+          return DEFAULT_RTTS[`${u}-${v}`] || 50;
+        };
+        
+        LINKS.forEach(link => {
+          const u = link.u;
+          const v = link.v;
+          
+          if (getLocalNodeState(u) === 'ONLINE' && getLocalNodeState(v) === 'ONLINE') {
+            const posU = prev[u] || DEFAULT_ANCHORS[u];
+            const posV = prev[v] || DEFAULT_ANCHORS[v];
+            
+            const dx = posV.x - posU.x;
+            const dy = posV.y - posU.y;
+            const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+            
+            const rtt = getLinkWeightLocal(u, v);
+            const targetDist = 60 + Math.min(rtt, 150) * 2.2;
+            
+            const force = kSpring * (dist - targetDist);
+            const forceX = force * (dx / dist);
+            const forceY = force * (dy / dist);
+            
+            if (u !== 'E') {
+              fx[u] += forceX;
+              fy[u] += forceY;
+            }
+            if (v !== 'E') {
+              fx[v] -= forceX;
+              fy[v] -= forceY;
+            }
+          }
+        });
+        
+        // 3. Node repulsion forces to prevent overlaps
+        const kRepel = 700;
+        const allNodes = ['E', 'A', 'B', 'C', 'D'];
+        for (let i = 0; i < allNodes.length; i++) {
+          for (let j = i + 1; j < allNodes.length; j++) {
+            const u = allNodes[i];
+            const v = allNodes[j];
+            if (getLocalNodeState(u) === 'ONLINE' && getLocalNodeState(v) === 'ONLINE') {
+              const posU = prev[u] || DEFAULT_ANCHORS[u];
+              const posV = prev[v] || DEFAULT_ANCHORS[v];
+              
+              const dx = posV.x - posU.x;
+              const dy = posV.y - posU.y;
+              const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+              
+              if (dist < 80) {
+                const force = -kRepel / (dist * dist || 1);
+                const forceX = force * (dx / dist);
+                const forceY = force * (dy / dist);
+                
+                if (u !== 'E') {
+                  fx[u] += forceX;
+                  fy[u] += forceY;
+                }
+                if (v !== 'E') {
+                  fx[v] -= forceX;
+                  fy[v] -= forceY;
+                }
+              }
+            }
+          }
+        }
+        
+        // 4. Update coordinates with boundary limits
+        floatNodes.forEach(nodeId => {
+          if (getLocalNodeState(nodeId) === 'ONLINE') {
+            const currentPos = prev[nodeId] || DEFAULT_ANCHORS[nodeId];
+            const maxForce = 15;
+            const forceX = Math.max(-maxForce, Math.min(maxForce, fx[nodeId]));
+            const forceY = Math.max(-maxForce, Math.min(maxForce, fy[nodeId]));
+            
+            let nx = currentPos.x + forceX;
+            let ny = currentPos.y + forceY;
+            
+            nx = Math.max(30, Math.min(470, nx));
+            ny = Math.max(30, Math.min(470, ny));
+            
+            next[nodeId] = { x: nx, y: ny };
+          }
+        });
+        
+        return next;
+      });
+      
+      animId = requestAnimationFrame(tick);
+    };
+    
+    animId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(animId);
+  }, []);
 
   // Trigger packet animation when a new packet is observed
   useEffect(() => {
@@ -36,17 +194,17 @@ export default function NetworkGraph({ nodes, rttMatrix, activeRoute, lastPacket
     }
     
     // Animate only if both source and destination are online/visible
-    if (NODE_POSITIONS[src] && NODE_POSITIONS[dst] && src !== dst) {
+    if (positions[src] && positions[dst] && src !== dst) {
       if (getNodeState(src) === 'ONLINE' && getNodeState(dst) === 'ONLINE') {
         const packetId = Math.random().toString(36).substr(2, 9);
         const isEmergency = lastPacket.priority === 'EMERGENCY' || lastPacket.type === 'EMERGENCY';
         
         const newAnimPacket = {
           id: packetId,
-          x1: NODE_POSITIONS[src].x,
-          y1: NODE_POSITIONS[src].y,
-          x2: NODE_POSITIONS[dst].x,
-          y2: NODE_POSITIONS[dst].y,
+          x1: positions[src].x,
+          y1: positions[src].y,
+          x2: positions[dst].x,
+          y2: positions[dst].y,
           color: isEmergency ? 'var(--accent-red)' : 'var(--accent-cyan)'
         };
         
@@ -57,7 +215,7 @@ export default function NetworkGraph({ nodes, rttMatrix, activeRoute, lastPacket
         }, 800);
       }
     }
-  }, [lastPacket]);
+  }, [lastPacket, positions]);
 
   const getNodeState = (nodeId) => {
     const node = nodes.find(n => n.id === nodeId);
@@ -89,7 +247,7 @@ export default function NetworkGraph({ nodes, rttMatrix, activeRoute, lastPacket
   );
 
   // Filter nodes: only render nodes that are ONLINE
-  const visibleNodes = Object.entries(NODE_POSITIONS).filter(([nodeId]) => 
+  const visibleNodes = Object.entries(positions).filter(([nodeId]) => 
     getNodeState(nodeId) === 'ONLINE'
   );
 
@@ -115,8 +273,8 @@ export default function NetworkGraph({ nodes, rttMatrix, activeRoute, lastPacket
 
           {/* 1. Draw all visible topology edges */}
           {visibleLinks.map((link, idx) => {
-            const posU = NODE_POSITIONS[link.u];
-            const posV = NODE_POSITIONS[link.v];
+            const posU = positions[link.u];
+            const posV = positions[link.v];
             const rtt = getLinkWeight(link.u, link.v);
             const isActive = isLinkActiveRoute(link.u, link.v);
             

@@ -3,13 +3,13 @@ import heapq
 import time
 from typing import Dict, List, Tuple, Optional
 
-# Node coordinate positions for the A* spatial heuristic (Star configuration)
+# Node coordinate positions for the A* spatial heuristic (Center-anchored configuration)
 NODE_COORDINATES = {
-    'E': (2.5, 0.8),  # Central Hospital E (Gateway) - Top
-    'A': (0.9, 1.9),  # Local Clinic A - Top-Left
-    'B': (1.5, 3.7),  # Local Clinic B - Bottom-Left
-    'C': (3.5, 3.7),  # Civilian Shelter C - Bottom-Right
-    'D': (4.1, 1.9)   # Civilian Shelter D - Top-Right
+    'E': (2.5, 2.5),  # Central Hospital E (Gateway) - Center
+    'A': (1.3, 1.3),  # Local Clinic A - Top-Left
+    'B': (1.3, 3.7),  # Local Clinic B - Bottom-Left
+    'C': (3.7, 3.7),  # Civilian Shelter C - Bottom-Right
+    'D': (3.7, 1.3)   # Civilian Shelter D - Top-Right
 }
 
 class RoutingGraph:
